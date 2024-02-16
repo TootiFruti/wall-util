@@ -15,6 +15,7 @@ https://github.com/LGFae/swww
 And now the binary is ready, "target/release/wall-util"
 
 # How to use:
+0. -h: for help.
 1. -t: for specifying the time interval (seconds), default is 0 seconds, which might cause lag and the difference will be unnoticable.
 2. -d: for specifying the path to the directory
 3. -m: for specifying which mode to use
