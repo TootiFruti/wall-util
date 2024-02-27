@@ -1,7 +1,8 @@
 use rand::seq::SliceRandom;
+use serde::{Deserialize, Serialize};
 use std::io::Write;
 use std::path::{Path, PathBuf};
-use std::process::Command;
+use std::process::{exit, Command};
 use std::time::Duration;
 use std::{env, fs, io, thread};
 
@@ -13,22 +14,15 @@ struct CliOptions {
     active: bool,
 }
 
+#[derive(Debug, Serialize, Deserialize)]
+struct WallheavenObj {
+    #[serde(rename = "path")]
+    path: String,
+}
+
 fn main() {
     let mut options: CliOptions = parse_args();
     if !options.active {
-        return;
-    }
-    if options.path_to_dir.is_empty() {
-        println!("path to wallpaper directory not given.");
-        return;
-    }
-    if !(Path::new(options.path_to_dir.as_str()).is_dir()) {
-        println!("{}: Invaild path.", options.path_to_dir);
-        return;
-    }
-
-    if options.mode.is_empty() {
-        println!("No mode was chosen");
         return;
     }
     if options.time_interval.is_empty() {
@@ -37,6 +31,7 @@ fn main() {
     }
     match options.mode.as_str() {
         "wall-show" => wall_show(options),
+        "wallhaven" => wall_from_wallheaven(options),
         _ => println!("{}: Invaild mode.", options.mode),
     }
 }
@@ -57,10 +52,7 @@ fn parse_args() -> CliOptions {
         for i in 0..args.len() {
             let arg = args[i].as_str();
             match arg {
-                "-d" => {
-                    println!("Path of directory : {}", args[i + 1]);
-                    options.path_to_dir = String::from(&args[i + 1])
-                }
+                "-d" => options.path_to_dir = String::from(&args[i + 1]),
                 "-t" => {
                     options.time_interval = String::from(&args[i + 1]);
                     println!("Time interval: {} seconds", options.time_interval);
@@ -70,6 +62,9 @@ fn parse_args() -> CliOptions {
                 }
                 "-h" => {
                     print_help();
+                }
+                "-save" => {
+                    options._optional_args = String::from("save");
                 }
                 _ => continue,
             }
@@ -88,7 +83,7 @@ Usage:      wall-util [OPTIONS]
         -t 10
 -m      for setting mode.
         wall-show   it will go thru all the wallpaper from the directory randomly.
-        -m wall-show
+        wallhaven   it'll be fetching wallpapers from https://wallhaven.cc
 ";
     println!("{help}");
 }
@@ -108,13 +103,21 @@ fn walls_from_dir(path_of_dir: &str) -> io::Result<Vec<PathBuf>> {
 }
 
 fn wall_show(mut options: CliOptions) {
-    let mut walls = walls_from_dir(options.path_to_dir.as_str()).unwrap();
-    let time_interval: u64 = options.time_interval.parse::<u64>().unwrap_or_else(|_e| {
-        println!("Invaild time interval: {}", options.time_interval);
+    if options.path_to_dir.is_empty() {
+        println!("path to wallpaper directory not given.");
         options.active = false;
-        0
-    });
+    }
+    if !(Path::new(options.path_to_dir.as_str()).is_dir()) {
+        println!("{}: Invaild path.", options.path_to_dir);
+        options.active = false;
+    }
     if options.active {
+        let mut walls = walls_from_dir(options.path_to_dir.as_str()).unwrap();
+        let time_interval: u64 = options.time_interval.parse::<u64>().unwrap_or_else(|_e| {
+            println!("Invaild time interval: {}", options.time_interval);
+            options.active = false;
+            0
+        });
         loop {
             let mut rng = rand::thread_rng();
             walls.shuffle(&mut rng);
@@ -133,9 +136,116 @@ fn wall_show(mut options: CliOptions) {
     }
 }
 
-fn set_wall(wall: &str) {
-    Command::new("swww")
-        .args(["img", wall, "--transition-type", "any"])
+fn wall_from_wallheaven(mut options: CliOptions) {
+    let time_interval: u64 = options.time_interval.parse::<u64>().unwrap_or_else(|_e| {
+        println!("Invaild time interval: {}", options.time_interval);
+        options.active = false;
+        0
+    });
+
+    let mut save_dir_path = String::new();
+    if options.path_to_dir.is_empty() {
+        println!("No path to directory received. Current directory will be used.");
+        save_dir_path = String::from("wall-util-save.jpg");
+    } else {
+        let dir_path = &options.path_to_dir;
+        if Path::new(dir_path.as_str()).is_dir() {
+            if dir_path.ends_with('/') {
+                save_dir_path = format!("{dir_path}wall-util-save.jpg");
+            } else {
+                save_dir_path = format!("{dir_path}/wall-util-save.jpg");
+            }
+        } else {
+            println!("ERROR: {}: Invaild path", &options.path_to_dir);
+            exit(1);
+        }
+    }
+    println!("Path to directory: {save_dir_path}");
+
+    let mut tagnames = String::new();
+    let mut resolution = String::new();
+
+    print!("[OPTIONAL] Type the tags, seperated by spaces: ");
+    io::stdout().flush().unwrap();
+    io::stdin().read_line(&mut tagnames).unwrap();
+    let tagnames = tagnames.trim();
+    let tagnames = if tagnames.is_empty() {
+        String::new()
+    } else {
+        tagnames.replace(" ", "+")
+    };
+
+    print!("[OPTIONAL] Enter the resolution, (example: 1920x1080): ");
+    io::stdout().flush().unwrap();
+    io::stdin().read_line(&mut resolution).unwrap();
+    let resolution = resolution.trim();
+    let resolution = if resolution.is_empty() {
+        String::new()
+    } else {
+        resolution.replace(" ", "+")
+    };
+
+    let mut sorting = String::new();
+    print!("[OPTIONAL] Enter the sorting, toplist or random (default is random): ");
+    io::stdout().flush().unwrap();
+    io::stdin().read_line(&mut sorting).unwrap();
+    let sorting = sorting.trim();
+    let sorting = if sorting.is_empty() {
+        String::from("random")
+    } else {
+        String::from(sorting)
+    };
+    let link = format!(
+        "https://wallhaven.cc/api/v1/search?&q={}&categories=100&purity=100&resolution={}&sorting={}",
+        tagnames, resolution, sorting
+    );
+    if options.active {
+        let mut j = 1;
+        loop {
+            let repsonse = wallheaven_request(String::from(&link));
+            if repsonse.len() == 0 {
+                println!("Did not got any wallpapers for current options from wallheaven.");
+                exit(0);
+            }
+            for i in &repsonse {
+                print!("[{}]: {i}\r", j);
+                io::stdout().flush().unwrap();
+                j = j + 1;
+
+                Command::new("curl")
+                    .args([i.as_str(), "--output", save_dir_path.as_str()])
+                    .output()
+                    .unwrap();
+                set_wall(save_dir_path.as_str());
+                thread::sleep(Duration::from_secs(time_interval));
+            }
+        }
+    }
+}
+
+fn wallheaven_request(link: String) -> Vec<String> {
+    let query_url = link.as_str();
+    let response = Command::new("curl")
+        .arg(query_url)
         .output()
-        .unwrap();
+        .unwrap_or_else(|err| {
+            eprintln!("ERROR: Failed to use curl.\n{err}");
+            exit(1);
+        });
+    let response = String::from_utf8(response.stdout).unwrap();
+    let parse_json: serde_json::Value = serde_json::from_str(response.as_str()).unwrap();
+    let mut response: Vec<String> = Vec::new();
+    if let Some(data_array) = parse_json["data"].as_array() {
+        for i in data_array {
+            if let Some(path) = i.get("path").and_then(|p| p.as_str()) {
+                response.push(path.to_string());
+            }
+        }
+    }
+    response
+}
+
+fn set_wall(wall: &str) {
+    let args = ["img", wall, "--transition-type", "any"];
+    Command::new("swww").args(args).output().unwrap();
 }

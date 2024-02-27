@@ -21,6 +21,7 @@ And now the binary is ready, "target/release/wall-util"
 3. -m: for specifying which mode to use
    
        1. wall-show: it'll go thru the directory and set the wallpaper, randomly.
+       2. wallhaven: it'll be fetching wallpapers from https://wallhaven.cc
 
 # Why?
 I wanted to make a thing which will change wallpaper after some time, kind of like the slide show, so i started.
