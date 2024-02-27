@@ -5,6 +5,9 @@
 swww (*1)
 https://github.com/LGFae/swww
 
+curl
+https://github.com/curl/curl
+
 # How to install
 > git clone https://github.com/TootiFruti/wall-util
 
