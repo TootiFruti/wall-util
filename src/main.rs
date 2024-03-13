@@ -11,6 +11,8 @@ struct CliOptions {
     time_interval: String,
     mode: String,
     _optional_args: String,
+    wallhaven_save: bool,
+    wall_engine: String,
     active: bool,
 }
 
@@ -43,8 +45,11 @@ fn parse_args() -> CliOptions {
         time_interval: String::new(),
         mode: String::new(),
         _optional_args: String::new(),
+        wallhaven_save: false,
+        wall_engine: String::new(),
         active: true,
     };
+    let mut _t = String::new();
     if args.len() == 1 {
         print_help();
         options.active = false;
@@ -63,13 +68,15 @@ fn parse_args() -> CliOptions {
                 "-h" => {
                     print_help();
                 }
+                "-w" => options.wall_engine = String::from(&args[i + 1]),
                 "-save" => {
-                    options._optional_args = String::from("save");
+                    options.wallhaven_save = true;
                 }
                 _ => continue,
             }
         }
     }
+    options._optional_args = _t;
     options
 }
 
@@ -81,6 +88,9 @@ Usage:      wall-util [OPTIONS]
         -d /path/to/dir 
 -t      for setting time interval in seconds (default is 0) 
         -t 10
+-w      for specifying which wallpaper engine to use.
+        -w swww
+        (Currently supported swww)
 -m      for setting mode.
         wall-show   it will go thru all the wallpaper from the directory randomly.
         wallhaven   it'll be fetching wallpapers from https://wallhaven.cc
@@ -129,7 +139,7 @@ fn wall_show(mut options: CliOptions) {
                 print!("{i}: {wall}\r");
                 i = i + 1;
                 io::stdout().flush().unwrap();
-                set_wall(wall);
+                set_wall(wall, options.wall_engine.as_str());
                 thread::sleep(Duration::from_secs(time_interval));
             }
         }
@@ -143,24 +153,25 @@ fn wall_from_wallheaven(mut options: CliOptions) {
         0
     });
 
-    let mut save_dir_path = String::new();
+    let mut _save_dir_path = String::new();
     if options.path_to_dir.is_empty() {
         println!("No path to directory received. Current directory will be used.");
-        save_dir_path = String::from("wall-util-save.jpg");
+        _save_dir_path = String::from("wall-util-save.jpg");
     } else {
         let dir_path = &options.path_to_dir;
         if Path::new(dir_path.as_str()).is_dir() {
             if dir_path.ends_with('/') {
-                save_dir_path = format!("{dir_path}wall-util-save.jpg");
+                _save_dir_path = format!("{dir_path}wall-util-save");
             } else {
-                save_dir_path = format!("{dir_path}/wall-util-save.jpg");
+                _save_dir_path = format!("{dir_path}/wall-util-save");
             }
         } else {
             println!("ERROR: {}: Invaild path", &options.path_to_dir);
             exit(1);
         }
+        println!("Path to directory: {dir_path}");
     }
-    println!("Path to directory: {save_dir_path}");
+    let dir_tpl = String::from(&_save_dir_path);
 
     let mut tagnames = String::new();
     let mut resolution = String::new();
@@ -212,11 +223,21 @@ fn wall_from_wallheaven(mut options: CliOptions) {
                 io::stdout().flush().unwrap();
                 j = j + 1;
 
+                if options.wallhaven_save {
+                    let date = Command::new("date").args(["+%c"]).output().unwrap();
+                    let mut date = String::from_utf8(date.stdout).unwrap();
+                    date = date[0..(date.len() - 5)].to_string();
+                    _save_dir_path = format!("{} {}", _save_dir_path, date);
+                }
+
+                _save_dir_path = format!("{}.png", _save_dir_path);
+
                 Command::new("curl")
-                    .args([i.as_str(), "--output", save_dir_path.as_str()])
+                    .args([i.as_str(), "--output", _save_dir_path.as_str()])
                     .output()
                     .unwrap();
-                set_wall(save_dir_path.as_str());
+                set_wall(_save_dir_path.as_str(), options.wall_engine.as_str());
+                _save_dir_path = String::from(&dir_tpl);
                 thread::sleep(Duration::from_secs(time_interval));
             }
         }
@@ -245,7 +266,18 @@ fn wallheaven_request(link: String) -> Vec<String> {
     response
 }
 
-fn set_wall(wall: &str) {
-    let args = ["img", wall, "--transition-type", "any"];
-    Command::new("swww").args(args).output().unwrap();
+fn set_wall(wall: &str, wall_engine: &str) {
+    match wall_engine {
+        "swww" => {
+            let args = ["img", wall, "--transition-type", "any"];
+            Command::new("swww")
+                .args(args)
+                .output()
+                .unwrap_or_else(|_e| {
+                    println!("[Error] Problem using swww");
+                    exit(1);
+                });
+        }
+        _ => {}
+    }
 }
