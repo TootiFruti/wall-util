@@ -13,6 +13,7 @@ struct CliOptions {
     _optional_args: String,
     wallhaven_save: bool,
     wall_engine: String,
+    wallhaven_default_args: bool,
     active: bool,
 }
 
@@ -47,6 +48,7 @@ fn parse_args() -> CliOptions {
         _optional_args: String::new(),
         wallhaven_save: false,
         wall_engine: String::new(),
+        wallhaven_default_args: false,
         active: true,
     };
     let mut _t = String::new();
@@ -72,7 +74,15 @@ fn parse_args() -> CliOptions {
                 "-save" => {
                     options.wallhaven_save = true;
                 }
-                _ => continue,
+                "-default" => options.wallhaven_default_args = true,
+                _ => {
+                    if arg.starts_with("-") {
+                        println!("ERROR: {}: Invaild argument.", &arg);
+                        exit(1);
+                    } else {
+                        continue;
+                    }
+                }
             }
         }
     }
@@ -175,37 +185,42 @@ fn wall_from_wallheaven(mut options: CliOptions) {
 
     let mut tagnames = String::new();
     let mut resolution = String::new();
-
-    print!("[OPTIONAL] Type the tags, seperated by spaces: ");
-    io::stdout().flush().unwrap();
-    io::stdin().read_line(&mut tagnames).unwrap();
-    let tagnames = tagnames.trim();
-    let tagnames = if tagnames.is_empty() {
-        String::new()
-    } else {
-        tagnames.replace(" ", "+")
-    };
-
-    print!("[OPTIONAL] Enter the resolution, (example: 1920x1080): ");
-    io::stdout().flush().unwrap();
-    io::stdin().read_line(&mut resolution).unwrap();
-    let resolution = resolution.trim();
-    let resolution = if resolution.is_empty() {
-        String::new()
-    } else {
-        resolution.replace(" ", "+")
-    };
-
     let mut sorting = String::new();
-    print!("[OPTIONAL] Enter the sorting, toplist or random (default is random): ");
-    io::stdout().flush().unwrap();
-    io::stdin().read_line(&mut sorting).unwrap();
-    let sorting = sorting.trim();
-    let sorting = if sorting.is_empty() {
-        String::from("random")
-    } else {
-        String::from(sorting)
-    };
+
+    if !options.wallhaven_default_args {
+        print!("[OPTIONAL] Type the tags, seperated by spaces: ");
+        io::stdout().flush().unwrap();
+        io::stdin().read_line(&mut tagnames).unwrap();
+        let tagnames_t = tagnames.trim();
+        let tagnames_t = if tagnames_t.is_empty() {
+            String::new()
+        } else {
+            tagnames_t.replace(" ", "+")
+        };
+        tagnames = String::from(tagnames_t);
+
+        print!("[OPTIONAL] Enter the resolution, (example: 1920x1080): ");
+        io::stdout().flush().unwrap();
+        io::stdin().read_line(&mut resolution).unwrap();
+        let reso_t = resolution.trim();
+        let reso_t = if resolution.is_empty() {
+            String::new()
+        } else {
+            reso_t.replace(" ", "+")
+        };
+        resolution = String::from(reso_t);
+
+        print!("[OPTIONAL] Enter the sorting, toplist or random (default is random): ");
+        io::stdout().flush().unwrap();
+        io::stdin().read_line(&mut sorting).unwrap();
+        let sorting_t = sorting.trim();
+        let sorting_t = if sorting.is_empty() {
+            String::from("random")
+        } else {
+            String::from(sorting_t)
+        };
+        sorting = String::from(sorting_t);
+    }
     let link = format!(
         "https://wallhaven.cc/api/v1/search?&q={}&categories=100&purity=100&resolution={}&sorting={}",
         tagnames, resolution, sorting
@@ -219,10 +234,6 @@ fn wall_from_wallheaven(mut options: CliOptions) {
                 exit(0);
             }
             for i in &repsonse {
-                print!("[{}]: {i}\r", j);
-                io::stdout().flush().unwrap();
-                j = j + 1;
-
                 if options.wallhaven_save {
                     let date = Command::new("date").args(["+%c"]).output().unwrap();
                     let mut date = String::from_utf8(date.stdout).unwrap();
@@ -238,6 +249,10 @@ fn wall_from_wallheaven(mut options: CliOptions) {
                     .unwrap();
                 set_wall(_save_dir_path.as_str(), options.wall_engine.as_str());
                 _save_dir_path = String::from(&dir_tpl);
+                print!("[{}]: {i}\r", j);
+                io::stdout().flush().unwrap();
+                j = j + 1;
+
                 thread::sleep(Duration::from_secs(time_interval));
             }
         }
