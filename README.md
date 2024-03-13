@@ -1,9 +1,8 @@
 # wall-util
-(in rust obv.)
+wall-util is a wrapper around a (any) wallpaper engine (pre-installed on the system). With wall-util you can do things like slideshow of wallpaper or say wallpaper directly from internet (wallhaven.cc in wall-util), able to specify time interval and many more.
 
 # Requriement
-swww (*1)
-https://github.com/LGFae/swww
+Any wallpaper engine.
 
 curl
 https://github.com/curl/curl
@@ -21,10 +20,20 @@ And now the binary is ready, "target/release/wall-util"
 0. -h: for help.
 1. -t: for specifying the time interval (seconds), default is 0 seconds, which might cause lag and the difference will be unnoticable.
 2. -d: for specifying the path to the directory
+3. -w: for specifying wallpaper engine. (eg: -w swww)
 3. -m: for specifying which mode to use
    
        1. wall-show: it'll go thru the directory and set the wallpaper, randomly.
        2. wallhaven: it'll be fetching wallpapers from https://wallhaven.cc
+
+# Supported wallpaper engine
+1. swww 
+
+# wallhaven mode
+> -m wallhaven
+1. You can also use "-save" flag, with this all the downloaded wallpapers will be saved in the specified wallpaper directory.
+2. You can use "-default" flag, with this you will not need to input anything, and defaults will be used which is blank for tag, resolution and random for sorting.
+
 
 # Why?
 I wanted to make a thing which will change wallpaper after some time, kind of like the slide show, so i started.
@@ -33,13 +42,6 @@ So this way i'll also learn rust too. (hehe..)
 
 # What's next?
 My next goal will be to make one of those live wallpaper typa things which changes acc. to the time and weather.
-
-
-# *1
-swww is not mandatory, you can actually use anything you want. 
-In the main.rs file, the last function,
-set_wall, you can replace swww with whatever you want and then can change the cli-args too, in the array, ["arg1", "arg2", ...]
-Just use the wall variable when you have to specify the path to the wallpaper. And all set.
 
 # UPDATE 27 FEB 2024
 Added new mode called "wallhaven"
