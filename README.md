@@ -34,6 +34,8 @@ And now the binary is ready, "target/release/wall-util"
 1. You can also use "-save" flag, with this all the downloaded wallpapers will be saved in the specified wallpaper directory.
 2. You can use "-default" flag, with this you will not need to input anything, and defaults will be used which is blank for tag, resolution and random for sorting.
 
+Example: wall-util -t 60 -d path/to/wall_dir/ -m wallhaven -save -default -w swww 
+
 
 # Why?
 I wanted to make a thing which will change wallpaper after some time, kind of like the slide show, so i started.
