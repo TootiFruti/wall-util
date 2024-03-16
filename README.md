@@ -39,6 +39,7 @@ Example: wall-util -t 60 -d path/to/wall_dir/ -m wallhaven -save -default -w sww
 
 # logging
 > -log_lvl \<value\>
+
 For value 0, It will only be logging important informations.
 For value 1, It will be logging a bit more, which be less important, informations.
 For value 3, It will not be logging anything except ERRORs.
