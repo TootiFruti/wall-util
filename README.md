@@ -25,6 +25,7 @@ And now the binary is ready, "target/release/wall-util"
    
        1. wall-show: it'll go thru the directory and set the wallpaper, randomly.
        2. wallhaven: it'll be fetching wallpapers from https://wallhaven.cc
+4. -log_lvl
 
 # Supported wallpaper engine
 1. swww 
@@ -36,6 +37,11 @@ And now the binary is ready, "target/release/wall-util"
 
 Example: wall-util -t 60 -d path/to/wall_dir/ -m wallhaven -save -default -w swww 
 
+# logging
+> -log_lvl \<value\>
+For value 0, It will only be logging important informations.
+For value 1, It will be logging a bit more, which be less important, informations.
+For value 3, It will not be logging anything except ERRORs.
 
 # Why?
 I wanted to make a thing which will change wallpaper after some time, kind of like the slide show, so i started.
