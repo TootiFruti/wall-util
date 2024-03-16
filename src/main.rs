@@ -11,9 +11,12 @@ struct CliOptions {
     time_interval: String,
     mode: String,
     _optional_args: String,
+
     wallhaven_save: bool,
     wall_engine: String,
     wallhaven_default_args: bool,
+
+    log_lvl: u8,
     active: bool,
 }
 
@@ -25,17 +28,37 @@ struct WallheavenObj {
 
 fn main() {
     let mut options: CliOptions = parse_args();
+    if options.wall_engine.is_empty() {
+        log("No wallpaper engine specified.", 2, 0, &options);
+        exit(2)
+    }
     if !options.active {
         return;
     }
+    log(
+        format!("Time interval: {} seconds", options.time_interval).as_str(),
+        0,
+        0,
+        &options,
+    );
     if options.time_interval.is_empty() {
         options.time_interval = String::from("0");
-        println!("WARNING: Time interval is set to 0 seconds. It might cause lag and difference might be unnoticable");
+        log("Time interval is set to 0 seconds. It might cause lag and difference might be unnoticable", 1, 0, &options);
+    }
+    if options.mode.is_empty() {
+        log("No was mode chosen.", 0, 0, &options);
     }
     match options.mode.as_str() {
         "wall-show" => wall_show(options),
         "wallhaven" => wall_from_wallheaven(options),
-        _ => println!("{}: Invaild mode.", options.mode),
+        _ => {
+            log(
+                format!("{}: Invaild mode.", options.mode).as_str(),
+                2,
+                0,
+                &options,
+            );
+        }
     }
 }
 
@@ -49,6 +72,8 @@ fn parse_args() -> CliOptions {
         wallhaven_save: false,
         wall_engine: String::new(),
         wallhaven_default_args: false,
+
+        log_lvl: 0,
         active: true,
     };
     let mut _t = String::new();
@@ -59,10 +84,22 @@ fn parse_args() -> CliOptions {
         for i in 0..args.len() {
             let arg = args[i].as_str();
             match arg {
+                "-log_lvl" => {
+                    let log_lvl = String::from(&args[i + 1]);
+                    let log_lvl = log_lvl.parse::<u8>().unwrap_or_else(|_| {
+                        log(
+                            format!("{}: Invaild log_lvl value.", log_lvl).as_str(),
+                            2,
+                            0,
+                            &options,
+                        );
+                        exit(0);
+                    });
+                    options.log_lvl = log_lvl;
+                }
                 "-d" => options.path_to_dir = String::from(&args[i + 1]),
                 "-t" => {
                     options.time_interval = String::from(&args[i + 1]);
-                    println!("Time interval: {} seconds", options.time_interval);
                 }
                 "-m" => {
                     options.mode = String::from(&args[i + 1]);
@@ -77,7 +114,12 @@ fn parse_args() -> CliOptions {
                 "-default" => options.wallhaven_default_args = true,
                 _ => {
                     if arg.starts_with("-") {
-                        println!("ERROR: {}: Invaild argument.", &arg);
+                        log(
+                            format!(": {}: Invaild argument.", &arg).as_str(),
+                            2,
+                            0,
+                            &options,
+                        );
                         exit(1);
                     } else {
                         continue;
@@ -104,8 +146,19 @@ Usage:      wall-util [OPTIONS]
 -m      for setting mode.
         wall-show   it will go thru all the wallpaper from the directory randomly.
         wallhaven   it'll be fetching wallpapers from https://wallhaven.cc
-";
+
+
+# wallhaven mode
+> -m wallhaven
+1. You can also use \"-save\" flag, with this all the downloaded wallpapers will be saved in the specified wallpaper directory.
+2. You can use \"-default\" flag, with this you will not need to input anything, and defaults will be used which is blank for tag, resolution and random for sorting.
+
+Example: wall-util -t 60 -d path/to/wall_dir/ -m wallhaven -save -default -w swww 
+
+"
+;
     println!("{help}");
+    exit(0)
 }
 
 fn walls_from_dir(path_of_dir: &str) -> io::Result<Vec<PathBuf>> {
@@ -124,17 +177,23 @@ fn walls_from_dir(path_of_dir: &str) -> io::Result<Vec<PathBuf>> {
 
 fn wall_show(mut options: CliOptions) {
     if options.path_to_dir.is_empty() {
-        println!("path to wallpaper directory not given.");
+        log("path to wallpaper directory not given.", 2, 0, &options);
         options.active = false;
     }
     if !(Path::new(options.path_to_dir.as_str()).is_dir()) {
-        println!("{}: Invaild path.", options.path_to_dir);
+        log("{options.path_to_dir}: Invaild path.", 2, 0, &options);
         options.active = false;
     }
     if options.active {
         let mut walls = walls_from_dir(options.path_to_dir.as_str()).unwrap();
         let time_interval: u64 = options.time_interval.parse::<u64>().unwrap_or_else(|_e| {
-            println!("Invaild time interval: {}", options.time_interval);
+            println!();
+            log(
+                "Invaild time interval: {options.time_interval}",
+                2,
+                0,
+                &options,
+            );
             options.active = false;
             0
         });
@@ -142,30 +201,46 @@ fn wall_show(mut options: CliOptions) {
             let mut rng = rand::thread_rng();
             walls.shuffle(&mut rng);
             let mut i = 1;
-            println!("Total wallpaper: {}", walls.len());
+            log(
+                format!("Total wallpaper: {}", walls.len()).as_str(),
+                0,
+                0,
+                &options,
+            );
             for wall in &walls {
                 let wall = format!("{}", wall.display());
                 let wall = wall.as_str();
-                print!("{i}: {wall}\r");
+                if options.log_lvl == 0 || options.log_lvl == 1 {
+                    print!("{i}: {wall}\r");
+                    io::stdout().flush().unwrap();
+                }
                 i = i + 1;
-                io::stdout().flush().unwrap();
-                set_wall(wall, options.wall_engine.as_str());
+                set_wall(wall, options.wall_engine.as_str(), &options);
                 thread::sleep(Duration::from_secs(time_interval));
             }
         }
     }
 }
 
-fn wall_from_wallheaven(mut options: CliOptions) {
+fn wall_from_wallheaven(options: CliOptions) {
     let time_interval: u64 = options.time_interval.parse::<u64>().unwrap_or_else(|_e| {
-        println!("Invaild time interval: {}", options.time_interval);
-        options.active = false;
-        0
+        log(
+            format!("Invaild time interval: {}", options.time_interval).as_str(),
+            2,
+            0,
+            &options,
+        );
+        exit(2)
     });
 
     let mut _save_dir_path = String::new();
     if options.path_to_dir.is_empty() {
-        println!("No path to directory received. Current directory will be used.");
+        log(
+            "No path to directory received. Current directory will be used.",
+            1,
+            0,
+            &options,
+        );
         _save_dir_path = String::from("wall-util-save.jpg");
     } else {
         let dir_path = &options.path_to_dir;
@@ -176,10 +251,20 @@ fn wall_from_wallheaven(mut options: CliOptions) {
                 _save_dir_path = format!("{dir_path}/wall-util-save");
             }
         } else {
-            println!("ERROR: {}: Invaild path", &options.path_to_dir);
-            exit(1);
+            log(
+                format!("{}: Invaild path", &options.path_to_dir).as_str(),
+                2,
+                0,
+                &options,
+            );
+            exit(2);
         }
-        println!("Path to directory: {dir_path}");
+        log(
+            format!("Path to directory: {}", dir_path).as_str(),
+            0,
+            0,
+            &options,
+        );
     }
     let dir_tpl = String::from(&_save_dir_path);
 
@@ -228,9 +313,15 @@ fn wall_from_wallheaven(mut options: CliOptions) {
     if options.active {
         let mut j = 1;
         loop {
-            let repsonse = wallheaven_request(String::from(&link));
+            let repsonse = wallheaven_request(String::from(&link), &options);
             if repsonse.len() == 0 {
-                println!("Did not got any wallpapers for current options from wallheaven.");
+                log(
+                    format!("Did not got any wallpapers for current options from wallheaven.")
+                        .as_str(),
+                    0,
+                    0,
+                    &options,
+                );
                 exit(0);
             }
             for i in &repsonse {
@@ -241,16 +332,22 @@ fn wall_from_wallheaven(mut options: CliOptions) {
                     _save_dir_path = format!("{} {}", _save_dir_path, date);
                 }
 
-                _save_dir_path = format!("{}.png", _save_dir_path);
+                _save_dir_path = format!("{}.jpg", _save_dir_path);
 
                 Command::new("curl")
                     .args([i.as_str(), "--output", _save_dir_path.as_str()])
                     .output()
                     .unwrap();
-                set_wall(_save_dir_path.as_str(), options.wall_engine.as_str());
+                set_wall(
+                    _save_dir_path.as_str(),
+                    options.wall_engine.as_str(),
+                    &options,
+                );
                 _save_dir_path = String::from(&dir_tpl);
-                print!("[{}]: {i}\r", j);
-                io::stdout().flush().unwrap();
+                if options.log_lvl == 0 || options.log_lvl == 1 {
+                    print!("[{}]: {i}\r", j);
+                    io::stdout().flush().unwrap();
+                }
                 j = j + 1;
 
                 thread::sleep(Duration::from_secs(time_interval));
@@ -259,16 +356,27 @@ fn wall_from_wallheaven(mut options: CliOptions) {
     }
 }
 
-fn wallheaven_request(link: String) -> Vec<String> {
+fn wallheaven_request(link: String, options: &CliOptions) -> Vec<String> {
     let query_url = link.as_str();
     let response = Command::new("curl")
         .arg(query_url)
         .output()
         .unwrap_or_else(|err| {
-            eprintln!("ERROR: Failed to use curl.\n{err}");
-            exit(1);
+            log(
+                format!("ERROR: Failed to use curl.\n{}", err).as_str(),
+                2,
+                0,
+                &options,
+            );
+            exit(2);
         });
     let response = String::from_utf8(response.stdout).unwrap();
+    log(
+        format!("curl reponse:\n{}", response).as_str(),
+        0,
+        1,
+        &options,
+    );
     let parse_json: serde_json::Value = serde_json::from_str(response.as_str()).unwrap();
     let mut response: Vec<String> = Vec::new();
     if let Some(data_array) = parse_json["data"].as_array() {
@@ -278,10 +386,54 @@ fn wallheaven_request(link: String) -> Vec<String> {
             }
         }
     }
+    log(
+        format!("response vector:\n{:?}", response).as_str(),
+        0,
+        1,
+        &options,
+    );
     response
 }
 
-fn set_wall(wall: &str, wall_engine: &str) {
+fn log(msg: &str, msg_type: u8, msg_lvl: u8, options: &CliOptions) {
+    const RED: &str = "\x1b[31m";
+    const GREEN: &str = "\x1b[32m";
+    const YELLOW: &str = "\x1b[33m";
+    const RESET: &str = "\x1b[0m";
+
+    // msg_type 1 is for Warning
+    // msg_type 2 is for Error
+    // msg_type 0 is for Info
+
+    let mut _text: String = String::new();
+
+    match msg_type {
+        0 => {
+            _text = format!("[{}INFO{}] {}", GREEN, RESET, msg);
+        }
+        1 => {
+            _text = format!("[{}WARN{}] {}", YELLOW, RESET, msg);
+        }
+        2 => {
+            _text = format!("[{}ERROR{}] {}", RED, RESET, msg);
+        }
+        _ => {
+            println!("[LOG] {}: Invaild msg_type", msg_type)
+        }
+    }
+
+    if msg_lvl == 0 && options.log_lvl == 0 {
+        println!("{}", &_text);
+    } else if options.log_lvl == 1 {
+        println!("{}", &_text);
+    } else if options.log_lvl == 3 {
+        if msg_lvl == 2 {
+            println!("{}", &_text);
+        }
+    }
+}
+
+fn set_wall(wall: &str, wall_engine: &str, options: &CliOptions) {
     match wall_engine {
         "swww" => {
             let args = ["img", wall, "--transition-type", "any"];
@@ -289,8 +441,8 @@ fn set_wall(wall: &str, wall_engine: &str) {
                 .args(args)
                 .output()
                 .unwrap_or_else(|_e| {
-                    println!("[Error] Problem using swww");
-                    exit(1);
+                    log("Problem using swww.", 2, 0, &options);
+                    exit(2);
                 });
         }
         _ => {}
