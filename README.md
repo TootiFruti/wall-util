@@ -1,5 +1,5 @@
 # wall-util
-wall-util is a wrapper around a (any) wallpaper engine (pre-installed on the system). With wall-util you can do things like slideshow of wallpaper or say wallpaper directly from internet (wallhaven.cc in wall-util), able to specify time interval and many more.
+wall-util is a wrapper around a (any) wallpaper engine (pre-installed on the system). With wall-util you can do things like slideshow of wallpaper or say wallpaper directly from internet (wallhaven.cc in wall-util), able to specify time interval and many more. Basically with wall-util i am hoping to achieve things which are outside the scope of a wallpaper engine.
 
 # Requriement
 Any wallpaper engine.
