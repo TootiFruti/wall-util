@@ -441,7 +441,33 @@ fn set_wall(wall: &str, wall_engine: &str, options: &CliOptions) {
                 .args(args)
                 .output()
                 .unwrap_or_else(|_e| {
-                    log("Problem using swww.", 2, 0, &options);
+                    log(
+                        format!("Failed to use swww.\n{}", _e).as_str(),
+                        2,
+                        0,
+                        &options,
+                    );
+                    exit(2);
+                });
+        }
+        "gnome" => {
+            let t = format!("file:///{}", wall);
+            let args = [
+                "set",
+                "org.gnome.desktop.background",
+                "picture-uri",
+                &t.as_str(),
+            ];
+            Command::new("gsettings")
+                .args(args)
+                .output()
+                .unwrap_or_else(|e| {
+                    log(
+                        format!("Failed to use gsettings.\n{}", e).as_str(),
+                        2,
+                        0,
+                        &options,
+                    );
                     exit(2);
                 });
         }
