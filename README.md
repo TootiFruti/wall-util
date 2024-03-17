@@ -28,7 +28,8 @@ And now the binary is ready, "target/release/wall-util"
 4. -log_lvl
 
 # Supported wallpaper engine
-1. swww 
+1. swww             (-w swww)
+2. The Gnome DE     (-w gnome)
 
 # wallhaven mode
 > -m wallhaven
