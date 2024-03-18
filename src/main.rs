@@ -146,6 +146,7 @@ Usage:      wall-util [OPTIONS]
 -m      for setting mode.
         wall-show   it will go thru all the wallpaper from the directory randomly.
         wallhaven   it'll be fetching wallpapers from https://wallhaven.cc
+-log_lvl
 
 
 # wallhaven mode
@@ -158,6 +159,14 @@ Example: wall-util -t 60 -d path/to/wall_dir/ -m wallhaven -save -default -w sww
 # Supported wallpaper engine
 1. swww             (-w swww)
 2. The Gnome DE     (-w gnome)
+
+# logging
+> -log_lvl <value>
+
+For value 0, It will only be logging important informations.
+For value 1, It will be logging a bit more, which be less important, informations.
+For value 3, It will not be logging anything except ERRORs.
+
 "
 ;
     println!("{help}");
