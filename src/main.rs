@@ -155,6 +155,9 @@ Usage:      wall-util [OPTIONS]
 
 Example: wall-util -t 60 -d path/to/wall_dir/ -m wallhaven -save -default -w swww 
 
+# Supported wallpaper engine
+1. swww             (-w swww)
+2. The Gnome DE     (-w gnome)
 "
 ;
     println!("{help}");
