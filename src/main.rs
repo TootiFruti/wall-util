@@ -213,6 +213,8 @@ Usage:      wall-util [OPTIONS]
 -m        for setting mode.
           wall-show   it will go thru all the wallpaper from the directory randomly.
           wallhaven   it'll be fetching wallpapers from https://wallhaven.cc
+                      -args 'tagnames1,tagname2':'resolution1,resolution2':sorting
+                      you can pass the wallhaven's search arguments in this pattern with -args flag.
 -restore  with this flag, wall-util will be using arguments from the last time.
 
 -log_lvl
@@ -222,6 +224,9 @@ Usage:      wall-util [OPTIONS]
 > -m wallhaven
 1. You can also use \"-save\" flag, with this all the downloaded wallpapers will be saved in the specified wallpaper directory.
 2. You can use \"-default\" flag, with this you will not need to input anything, and defaults will be used which is blank for tag, resolution and random for sorting.
+
+-args 'tagnames1,tagnames2':'resolution1,resolution2':sorting
+If you want to pass the arguments from cli for the wallhaven search, you can add the arguments just like the above pattern.
 
 Example: wall-util -t 60 -d path/to/wall_dir/ -m wallhaven -save -default -w swww 
 
