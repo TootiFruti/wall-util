@@ -17,7 +17,7 @@ https://github.com/curl/curl
 And now the binary is ready, "target/release/wall-util"
 
 # First time use.
-For you to use wall-util, directory and file must be present/exist, for example, one of them being ~/.local/share/wall-util. For the required file to setup, just use the wall-util (without any arguments), then it will ask you whether you want to set these files up or not. Enter "y" as choice. And the next time you are all ready.
+For you to use wall-util, required directory and file must be present/exist, for example, one of them being ~/.local/share/wall-util. For the required file to setup, just use the wall-util (without any arguments), then it will ask you whether you want to set these files up or not. Enter "y" as choice. And the next time you are all ready.
 
 # How to use:
 0. -h: for help.
