@@ -28,6 +28,8 @@ For you to use wall-util, required directory and file must be present/exist, for
    
        1. wall-show: it'll go thru the directory and set the wallpaper, randomly.
        2. wallhaven: it'll be fetching wallpapers from https://wallhaven.cc
+                      -args 'tagnames1,tagname2':'resolution1,resolution2':sorting
+                      you can pass the wallhaven's search arguments in this pattern with -args flag.
 4. -restore: with this flag, wall-util will be using arguments from the last time.
 5. -log_lvl
 
@@ -44,6 +46,9 @@ For you to use wall-util, required directory and file must be present/exist, for
 
 1. You can also use "-save" flag, with this all the downloaded wallpapers will be saved in the specified wallpaper directory.
 2. You can use "-default" flag, with this you will not need to input anything, and defaults will be used which is blank for tag, resolution and random for sorting.
+
+-args 'tagnames1,tagnames2':'resolution1,resolution2':sorting
+If you want to pass the arguments from cli for the wallhaven search, you can add the arguments just like the above pattern.
 
 Example: wall-util -t 60 -d path/to/wall_dir/ -m wallhaven -save -default -w swww 
 
