@@ -1,11 +1,13 @@
 use rand::seq::SliceRandom;
 use serde::{Deserialize, Serialize};
-use std::io::Write;
+use std::fs::{create_dir, read_to_string, File, OpenOptions};
+use std::io::{self, Write};
 use std::path::{Path, PathBuf};
 use std::process::{exit, Command};
 use std::time::Duration;
-use std::{env, fs, io, thread};
+use std::{env, fs, thread};
 
+#[derive(Debug, Serialize, Deserialize)]
 struct CliOptions {
     path_to_dir: String,
     time_interval: String,
@@ -15,6 +17,9 @@ struct CliOptions {
     wallhaven_save: bool,
     wall_engine: String,
     wallhaven_default_args: bool,
+
+    wall_util_dir_path: String,
+    wall_util_dir_path_exists: bool,
 
     log_lvl: u8,
     active: bool,
@@ -28,6 +33,45 @@ struct WallheavenObj {
 
 fn main() {
     let mut options: CliOptions = parse_args();
+
+    if Path::new(format!("{}/logs/latest.txt", options.wall_util_dir_path).as_str()).is_file() {
+        Command::new("mv")
+            .args([
+                format!("{}/logs/latest.txt", options.wall_util_dir_path).as_str(),
+                format!("{}/logs/last.txt", options.wall_util_dir_path).as_str(),
+            ])
+            .output()
+            .unwrap_or_else(|e| {
+                log(
+                    format!("Failed to move latest log to last log.\n{}", e).as_str(),
+                    2,
+                    0,
+                    &options,
+                );
+                exit(2)
+            });
+    }
+
+    File::create(format!("{}/logs/latest.txt", options.wall_util_dir_path)).unwrap_or_else(|e| {
+        log(
+            format!("Failed to create latest.txt log file.\n{}", e).as_str(),
+            2,
+            0,
+            &options,
+        );
+        exit(2)
+    });
+
+    let mut file = File::create(format!("{}/last_cmd.txt", options.wall_util_dir_path)).unwrap();
+    let json = serde_json::to_string(&options).unwrap();
+    file.write_all(json.as_bytes()).unwrap();
+
+    log(
+        format!("CliOptions:\n{:?}", &options).as_str(),
+        0,
+        1,
+        &options,
+    );
     if options.wall_engine.is_empty() {
         log("No wallpaper engine specified.", 2, 0, &options);
         exit(2)
@@ -73,9 +117,23 @@ fn parse_args() -> CliOptions {
         wall_engine: String::new(),
         wallhaven_default_args: false,
 
+        wall_util_dir_path: String::new(),
+        wall_util_dir_path_exists: false,
+
         log_lvl: 0,
         active: true,
     };
+    let _t = env::var("HOME").unwrap_or_else(|_| env::var("USERPROFILE").unwrap());
+    options.wall_util_dir_path = format!("{}/.local/share/wall-util", _t);
+    if validate_wall_util_dir(&options) {
+        options.wall_util_dir_path_exists = true
+    }
+    log(
+        format!("options.wall_util_dir_path : {}", &_t).as_str(),
+        0,
+        1,
+        &options,
+    );
     let mut _t = String::new();
     if args.len() == 1 {
         print_help();
@@ -97,6 +155,12 @@ fn parse_args() -> CliOptions {
                     });
                     options.log_lvl = log_lvl;
                 }
+                "-restore" => {
+                    let json =
+                        read_to_string(format!("{}/last_cmd.txt", options.wall_util_dir_path))
+                            .unwrap();
+                    options = serde_json::from_str(&json).unwrap();
+                }
                 "-d" => options.path_to_dir = String::from(&args[i + 1]),
                 "-t" => {
                     options.time_interval = String::from(&args[i + 1]);
@@ -112,6 +176,9 @@ fn parse_args() -> CliOptions {
                     options.wallhaven_save = true;
                 }
                 "-default" => options.wallhaven_default_args = true,
+                "-args" => {
+                    _t = String::from(&args[i + 1]);
+                }
                 _ => {
                     if arg.starts_with("-") {
                         log(
@@ -136,16 +203,18 @@ fn print_help() {
     let help = "
 Usage:      wall-util [OPTIONS] 
 
--d      for setting path to wallpaper directory
-        -d /path/to/dir 
--t      for setting time interval in seconds (default is 0) 
-        -t 10
--w      for specifying which wallpaper engine to use.
-        -w swww
-        (Currently supported swww)
--m      for setting mode.
-        wall-show   it will go thru all the wallpaper from the directory randomly.
-        wallhaven   it'll be fetching wallpapers from https://wallhaven.cc
+-d        for setting path to wallpaper directory
+          -d /path/to/dir 
+-t        for setting time interval in seconds (default is 0) 
+          -t 10
+-w        for specifying which wallpaper engine to use.
+          -w swww
+          (Currently supported swww)
+-m        for setting mode.
+          wall-show   it will go thru all the wallpaper from the directory randomly.
+          wallhaven   it'll be fetching wallpapers from https://wallhaven.cc
+-restore  with this flag, wall-util will be using arguments from the last time.
+
 -log_lvl
 
 
@@ -157,8 +226,11 @@ Usage:      wall-util [OPTIONS]
 Example: wall-util -t 60 -d path/to/wall_dir/ -m wallhaven -save -default -w swww 
 
 # Supported wallpaper engine
-1. swww             (-w swww)
-2. The Gnome DE     (-w gnome)
+-w <wallpaper engine>
+1. swww           ->  For using swww.
+2. gnome          ->  For the Gnome DE.
+3. gsettings      ->  For using gsettings.
+4. xwallpaper     ->  For using xwallpaper.
 
 # logging
 > -log_lvl <value>
@@ -198,6 +270,7 @@ fn wall_show(mut options: CliOptions) {
     }
     if options.active {
         let mut walls = walls_from_dir(options.path_to_dir.as_str()).unwrap();
+        log(format!("{:?}", walls).as_str(), 0, 1, &options);
         let time_interval: u64 = options.time_interval.parse::<u64>().unwrap_or_else(|_e| {
             println!();
             log(
@@ -284,43 +357,79 @@ fn wall_from_wallheaven(options: CliOptions) {
     let mut resolution = String::new();
     let mut sorting = String::new();
 
-    if !options.wallhaven_default_args {
-        print!("[OPTIONAL] Type the tags, seperated by spaces: ");
-        io::stdout().flush().unwrap();
-        io::stdin().read_line(&mut tagnames).unwrap();
-        let tagnames_t = tagnames.trim();
-        let tagnames_t = if tagnames_t.is_empty() {
-            String::new()
-        } else {
-            tagnames_t.replace(" ", "+")
-        };
-        tagnames = String::from(tagnames_t);
+    if options._optional_args.is_empty() {
+        if !options.wallhaven_default_args {
+            print!("[OPTIONAL] Type the tags, seperated by spaces: ");
+            io::stdout().flush().unwrap();
+            io::stdin().read_line(&mut tagnames).unwrap();
+            let tagnames_t = tagnames.trim();
+            let tagnames_t = if tagnames_t.is_empty() {
+                String::new()
+            } else {
+                tagnames_t.replace(" ", "+")
+            };
+            tagnames = String::from(tagnames_t);
 
-        print!("[OPTIONAL] Enter the resolution, (example: 1920x1080): ");
-        io::stdout().flush().unwrap();
-        io::stdin().read_line(&mut resolution).unwrap();
-        let reso_t = resolution.trim();
-        let reso_t = if resolution.is_empty() {
-            String::new()
-        } else {
-            reso_t.replace(" ", "+")
-        };
-        resolution = String::from(reso_t);
+            print!("[OPTIONAL] Enter the resolution, (example: 1920x1080): ");
+            io::stdout().flush().unwrap();
+            io::stdin().read_line(&mut resolution).unwrap();
+            let reso_t = resolution.trim();
+            let reso_t = if resolution.is_empty() {
+                String::new()
+            } else {
+                reso_t.replace(" ", "+")
+            };
+            resolution = String::from(reso_t);
 
-        print!("[OPTIONAL] Enter the sorting, toplist or random (default is random): ");
-        io::stdout().flush().unwrap();
-        io::stdin().read_line(&mut sorting).unwrap();
-        let sorting_t = sorting.trim();
-        let sorting_t = if sorting.is_empty() {
-            String::from("random")
+            print!("[OPTIONAL] Enter the sorting, toplist or random (default is random): ");
+            io::stdout().flush().unwrap();
+            io::stdin().read_line(&mut sorting).unwrap();
+            let sorting_t = sorting.trim();
+            let sorting_t = if sorting.is_empty() {
+                String::from("random")
+            } else {
+                String::from(sorting_t)
+            };
+            sorting = String::from(sorting_t);
+        }
+    } else {
+        let wallhaven_args: Vec<String> = options
+            ._optional_args
+            .split(":")
+            .map(String::from)
+            .collect();
+        if wallhaven_args.len() != 3 {
+            log(
+                format!("{:?}: Invaild wallhaven arguments.", wallhaven_args).as_str(),
+                2,
+                0,
+                &options,
+            );
+            exit(2)
         } else {
-            String::from(sorting_t)
-        };
-        sorting = String::from(sorting_t);
+            tagnames = String::from(wallhaven_args.get(0).unwrap());
+            resolution = String::from(wallhaven_args.get(1).unwrap());
+            sorting = String::from(wallhaven_args.get(2).unwrap());
+            log(format!("Tagnames: {}", tagnames).as_str(), 0, 0, &options);
+            log(
+                format!("Resolution: {}", resolution).as_str(),
+                0,
+                0,
+                &options,
+            );
+            log(format!("Sorting: {}", sorting).as_str(), 0, 0, &options);
+            tagnames = tagnames.replace(" ", "+")
+        }
     }
     let link = format!(
         "https://wallhaven.cc/api/v1/search?&q={}&categories=100&purity=100&resolution={}&sorting={}",
         tagnames, resolution, sorting
+    );
+    log(
+        format!("wallhaven request link: {}", &link).as_str(),
+        0,
+        1,
+        &options,
     );
     if options.active {
         let mut j = 1;
@@ -407,6 +516,155 @@ fn wallheaven_request(link: String, options: &CliOptions) -> Vec<String> {
     response
 }
 
+fn validate_wall_util_dir(options: &CliOptions) -> bool {
+    if Path::new(options.wall_util_dir_path.as_str()).is_dir() {
+        log(
+            format!(
+                "{}: wall_util_dir validation checks out.",
+                options.wall_util_dir_path
+            )
+            .as_str(),
+            0,
+            1,
+            &options,
+        );
+        return true;
+    } else {
+        if Path::new(&options.wall_util_dir_path[0..options.wall_util_dir_path.len() - 9]).is_dir()
+        {
+            log(
+                format!(
+                    "Could not find the files/dir needed for wall-util to use. {}\nDo you want to set the needed files up? [Y/n]: ",
+                    options.wall_util_dir_path
+                )
+                .as_str(),
+                2,
+                0,
+                &options,
+            );
+            let mut choice = String::new();
+            io::stdin().read_line(&mut choice).unwrap();
+            let choice = choice.trim().to_string().to_lowercase().replace(" ", "");
+            if choice.as_str() == "y" {
+                wall_util_setup(&options);
+                return true;
+            } else if choice.as_str() == "n" {
+                exit(2)
+            } else {
+                log(
+                    format!("{}: Invaild choice.", choice).as_str(),
+                    2,
+                    0,
+                    &options,
+                );
+                exit(2)
+            }
+        } else {
+            log(
+                format!("Invaild path: {}", options.wall_util_dir_path).as_str(),
+                2,
+                0,
+                &options,
+            );
+            exit(2)
+        }
+    }
+}
+
+fn wall_util_setup(options: &CliOptions) {
+    create_dir(Path::new(
+        format!("{}", options.wall_util_dir_path).as_str(),
+    ))
+    .unwrap_or_else(|e| {
+        log(
+            format!(
+                "Failed to create {} directory. {}",
+                options.wall_util_dir_path, e
+            )
+            .as_str(),
+            2,
+            0,
+            &options,
+        );
+        exit(2)
+    });
+    log(
+        format!("Created directory: {}", options.wall_util_dir_path).as_str(),
+        0,
+        0,
+        &options,
+    );
+    create_dir(Path::new(
+        format!("{}/logs", options.wall_util_dir_path).as_str(),
+    ))
+    .unwrap_or_else(|e| {
+        log(
+            format!(
+                "Failed to create {} directory. {}",
+                options.wall_util_dir_path, e
+            )
+            .as_str(),
+            2,
+            0,
+            &options,
+        );
+        exit(2)
+    });
+    log(
+        format!("Created directory: {}/logs", options.wall_util_dir_path).as_str(),
+        0,
+        0,
+        &options,
+    );
+    File::create(format!("{}/logs/latest.txt", options.wall_util_dir_path).as_str())
+        .unwrap_or_else(|e| {
+            log(
+                format!(
+                    "Failed to file: {}/logs/last_cmd.txt\n{}",
+                    options.wall_util_dir_path, e
+                )
+                .as_str(),
+                2,
+                0,
+                &options,
+            );
+            exit(2)
+        });
+    log(
+        format!(
+            "Created file: {}/logs/latest.txt",
+            options.wall_util_dir_path
+        )
+        .as_str(),
+        0,
+        0,
+        &options,
+    );
+    File::create(format!("{}/last_cmd.txt", options.wall_util_dir_path).as_str()).unwrap_or_else(
+        |e| {
+            log(
+                format!(
+                    "Failed to file: {}/last_cmd.txt\n{}",
+                    options.wall_util_dir_path, e
+                )
+                .as_str(),
+                2,
+                0,
+                &options,
+            );
+            exit(2)
+        },
+    );
+    log(
+        format!("Created file: {}/last_cmd.txt", options.wall_util_dir_path).as_str(),
+        0,
+        0,
+        &options,
+    );
+
+    exit(0)
+}
+
 fn log(msg: &str, msg_type: u8, msg_lvl: u8, options: &CliOptions) {
     const RED: &str = "\x1b[31m";
     const GREEN: &str = "\x1b[32m";
@@ -418,16 +676,24 @@ fn log(msg: &str, msg_type: u8, msg_lvl: u8, options: &CliOptions) {
     // msg_type 0 is for Info
 
     let mut _text: String = String::new();
+    let mut log: String = String::new();
+
+    let date = Command::new("date").args(["+%c"]).output().unwrap();
+    let mut date = String::from_utf8(date.stdout).unwrap();
+    date = date[0..(date.len() - 5)].to_string();
 
     match msg_type {
         0 => {
             _text = format!("[{}INFO{}] {}", GREEN, RESET, msg);
+            log = format!("[{}][INFO]: {}", date, msg);
         }
         1 => {
             _text = format!("[{}WARN{}] {}", YELLOW, RESET, msg);
+            log = format!("[{}][WARN]: {}", date, msg);
         }
         2 => {
             _text = format!("[{}ERROR{}] {}", RED, RESET, msg);
+            log = format!("[{}][ERROR]: {}", date, msg);
         }
         _ => {
             println!("[LOG] {}: Invaild msg_type", msg_type)
@@ -443,9 +709,38 @@ fn log(msg: &str, msg_type: u8, msg_lvl: u8, options: &CliOptions) {
             println!("{}", &_text);
         }
     }
+
+    if options.wall_util_dir_path_exists {
+        let mut log_file = OpenOptions::new()
+            .write(true)
+            .append(true)
+            .open(Path::new(&format!(
+                "{}/logs/latest.txt",
+                options.wall_util_dir_path
+            )))
+            .unwrap_or_else({
+                |e| {
+                    println!(
+                        "Failed to open the latest log file: {}/logs/latest.txt\n{}",
+                        options.wall_util_dir_path, e
+                    );
+                    exit(2)
+                }
+            });
+        writeln!(log_file, "{}", log).unwrap_or_else(|e| {
+            println!("Failed to write in the log file.\n{}", e);
+            exit(2)
+        });
+    }
 }
 
 fn set_wall(wall: &str, wall_engine: &str, options: &CliOptions) {
+    log(
+        format!("[set_wall]\nwall: {}\nwall_engine: {}", &wall, &wall_engine).as_str(),
+        0,
+        1,
+        &options,
+    );
     match wall_engine {
         "swww" => {
             let args = ["img", wall, "--transition-type", "any"];
@@ -483,6 +778,49 @@ fn set_wall(wall: &str, wall_engine: &str, options: &CliOptions) {
                     exit(2);
                 });
         }
-        _ => {}
+        "gsettings" => {
+            let t = format!("file:///{}", wall);
+            let args = [
+                "set",
+                "org.gnome.desktop.background",
+                "picture-uri",
+                &t.as_str(),
+            ];
+            Command::new("gsettings")
+                .args(args)
+                .output()
+                .unwrap_or_else(|e| {
+                    log(
+                        format!("Failed to use gsettings.\n{}", e).as_str(),
+                        2,
+                        0,
+                        &options,
+                    );
+                    exit(2);
+                });
+        }
+        "xwallpaper" => {
+            let args = ["--zoom", wall];
+            Command::new("xwallpaper")
+                .args(args)
+                .output()
+                .unwrap_or_else(|e| {
+                    log(
+                        format!("Failed to use xwallpaper.\n{}", e).as_str(),
+                        2,
+                        0,
+                        &options,
+                    );
+                    exit(2);
+                });
+        }
+        _ => {
+            log(
+                format!("{}: Unknown wallpaper engine.", wall_engine).as_str(),
+                2,
+                0,
+                &options,
+            );
+        }
     }
 }
